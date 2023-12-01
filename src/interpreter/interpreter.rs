@@ -28,10 +28,7 @@ impl Interpreter {
                 "\x1b[1;31mInterpreterError\x1b[0m  {}{}",
                 e,
                 if self.stack_info.len() != 0 {
-                    format!(
-                        "\n\tat cell {}",
-                        self.stack_info.join(" in loop body\n\tat cell ")
-                    )
+                    format!("\n\tat cell {}", self.stack_info.join("\n\tat cell "))
                 } else {
                     String::new()
                 }
@@ -98,11 +95,15 @@ impl Interpreter {
                     stack[cursor] = buffer[0];
                 }
                 Token::EnterLoop => {
-                    let start_cursor = token_cursor;
-
+                    // `[`: If current cell's is 0, jump to matching `]`'s next token.
                     let mut level = 1;
-                    let mut end_cursor = start_cursor;
+                    let mut end_cursor = token_cursor;
                     while level != 0 {
+                        if tokens.len() - 1 <= end_cursor
+                            && !matches!(tokens[end_cursor], Token::ExitLoop)
+                        {
+                            Err("Loop not closed")?;
+                        }
                         end_cursor += 1;
                         match tokens[end_cursor] {
                             Token::EnterLoop => level += 1,
@@ -110,44 +111,42 @@ impl Interpreter {
                             _ => (),
                         }
                     }
-                    // start_cursor at `[`, end_cursor at `]`
+                    // start_cursor at `[`, end_cursor at outmost `]`
 
-                    // Record stack now in case of error from loop.
-                    let last = if self.stack_info.len() == 0 {
-                        0
-                    } else {
-                        self.stack_info.len() - 1
-                    };
-                    self.stack_info[last] = format!(
-                        "{}, token: {:?} (index {})",
-                        cursor, tokens[token_cursor], token_cursor
-                    );
-
-                    let loop_body = tokens[(start_cursor + 1)..end_cursor].to_vec();
-                    // The loop body executes until stack[cursor] == 0.
-                    // However, cursor can be called to move from the loop.
-                    self.handle_loop(loop_body, cursor, stack)?;
-                    token_cursor = end_cursor;
-                    continue;
+                    if stack[cursor] == 0 {
+                        token_cursor = end_cursor + 1;
+                        continue;
+                    }
                 }
-                Token::ExitLoop => (),
+                Token::ExitLoop => {
+                    // `]`: If current cell's is not 0, jump to matching `[`'s next token.
+                    if token_cursor == 0 {
+                        Err("Loop end matches no start")?;
+                    }
+
+                    let mut level = 1;
+                    let mut start_cursor = token_cursor;
+                    while level != 0 {
+                        if start_cursor == 0 && !matches!(tokens[start_cursor], Token::EnterLoop) {
+                            Err("Loop end matches no start")?;
+                        }
+                        start_cursor -= 1;
+                        match tokens[start_cursor] {
+                            Token::EnterLoop => level -= 1,
+                            Token::ExitLoop => level += 1,
+                            _ => (),
+                        }
+                    }
+                    // start_cursor at `[`
+
+                    if stack[cursor] != 0 {
+                        token_cursor = start_cursor + 1;
+                        continue;
+                    }
+                }
             }
             token_cursor += 1;
         }
         Ok(cursor)
-    }
-
-    fn handle_loop(
-        &mut self,
-        body: Vec<Token>,
-        mut cursor: usize,
-        stack: &mut Vec<u8>,
-    ) -> Result<(), Box<dyn Error>> {
-        self.stack_info.push(String::new());
-        while stack[cursor] != 0 {
-            cursor = self.execute(&body, cursor, stack)?;
-        }
-        self.stack_info.pop();
-        Ok(())
     }
 }
