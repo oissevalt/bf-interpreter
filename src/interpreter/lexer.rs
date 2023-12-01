@@ -8,7 +8,10 @@ pub(crate) struct Lexer {
 impl Lexer {
     pub fn new(content: impl Into<String>) -> Self {
         let content: String = content.into();
-        Lexer { content: content.chars().collect(), cursor: 0 }
+        Lexer {
+            content: content.chars().collect(),
+            cursor: 0,
+        }
     }
 
     pub fn tokenize(&mut self) -> Vec<Token> {
@@ -27,7 +30,7 @@ impl Lexer {
                 _ => {
                     self.cursor += 1;
                     continue;
-                }, // Spaces, new lines and comments
+                } // Spaces, new lines and comments
             };
             tokens.push(token);
             self.cursor += 1;

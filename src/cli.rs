@@ -10,5 +10,5 @@ pub(crate) struct Cli {
 
     /// Interpret from stdin
     #[arg(short, conflicts_with("file"))]
-    pub input: Option<String>
+    pub input: Option<String>,
 }
