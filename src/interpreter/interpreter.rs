@@ -1,5 +1,5 @@
 use super::{token::Token, lexer::Lexer};
-use std::io::{self, Read, Write};
+use std::{io::{self, Read, Write}, error::Error};
 
 pub struct Interpreter {
     lexer: Lexer
@@ -13,10 +13,12 @@ impl Interpreter {
 
     pub fn interpret(&mut self) {
         let tokens = self.lexer.tokenize();
-        self.execute(&tokens, 0, &mut vec![0u8; 30000]);
+        if let Err(e) = self.execute(&tokens, 0, &mut vec![0u8; 30000]) {
+            println!("\x1b[1;31mInterpreterError\x1b[0m\t{}", e);
+        }
     }
 
-    fn execute(&mut self, tokens: &Vec<Token>, mut cursor: usize, stack: &mut Vec<u8>) -> usize {
+    fn execute(&mut self, tokens: &Vec<Token>, mut cursor: usize, stack: &mut Vec<u8>) -> Result<usize, Box<dyn Error>> {
         let mut in_loop = false;
         let mut token_cursor = 0;
         while token_cursor < tokens.len() {
@@ -78,7 +80,7 @@ impl Interpreter {
                     let loop_body = tokens[(start_cursor + 1)..end_cursor].to_vec();
                     // The loop body executes until stack[cursor] == 0.
                     // However, cursor can be called to move from the loop.
-                    self.handle_loop(loop_body, cursor, stack);
+                    self.handle_loop(loop_body, cursor, stack)?;
                     token_cursor = end_cursor;
                     continue;
                 }
@@ -86,12 +88,13 @@ impl Interpreter {
             }
             token_cursor += 1;
         }
-        cursor
+        Ok(cursor)
     }
 
-    fn handle_loop(&mut self, body: Vec<Token>, mut cursor: usize, stack: &mut Vec<u8>) {
+    fn handle_loop(&mut self, body: Vec<Token>, mut cursor: usize, stack: &mut Vec<u8>) -> Result<(), Box<dyn Error>> {
         while stack[cursor] != 0 {
-            cursor = self.execute(&body, cursor, stack);
+            cursor = self.execute(&body, cursor, stack)?;
         }
+        Ok(())
     }
 }
